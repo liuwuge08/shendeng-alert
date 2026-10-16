@@ -44,28 +44,42 @@ jobs:
           rm gradle-8.2-bin.zip
 
       - name: Build Debug APK
-        id: build
-        run: |
-          gradle assembleDebug --stacktrace > /tmp/build.log 2>&1
-          echo "exit_code=$?" >> $GITHUB_OUTPUT
-        continue-on-error: true
+        run: gradle assembleDebug --no-daemon
 
-      - name: Upload build log and APK to Release
-        if: always()
-        uses: softprops/action-gh-release@v2
+      - name: Verify APK
+        run: |
+          ls -la app/build/outputs/apk/debug/
+          echo "APK_SIZE=$(stat -c%s app/build/outputs/apk/debug/app-debug.apk)" >> $GITHUB_ENV
+
+      - name: Upload APK (artifact)
+        uses: actions/upload-artifact@v4
         with:
-          tag_name: build-output
-          name: Build Output
-          body: Build result
-          files: |
-            /tmp/build.log
-          fail_on_unmatched_files: false
+          name: app-debug
+          path: app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Create Release and upload APK
+        run: |
+          TAG="latest"
+          API_URL="https://api.github.com/repos/${{ github.repository }}"
+          
+          # Delete existing release if any
+          EXISTING=$(curl -s -H "Authorization: token $GITHUB_TOKEN" "$API_URL/releases/tags/$TAG" || echo "")
+          if echo "$EXISTING" | grep -q '"id"'; then
+            REL_ID=$(echo "$EXISTING" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
+            curl -s -X DELETE -H "Authorization: token $GITHUB_TOKEN" "$API_URL/releases/$REL_ID"
+            # Also delete the tag
+            curl -s -X DELETE -H "Authorization: token $GITHUB_TOKEN" "$API_URL/git/refs/tags/$TAG"
+          fi
+          
+          # Create new release
+          RESP=$(curl -s -X POST             -H "Authorization: token $GITHUB_TOKEN"             -H "Content-Type: application/json"             -d '{"tag_name":"'$TAG'","name":"神灯告警APK","body":"自动构建的神灯告警语音播报APK"}'             "$API_URL/releases")
+          
+          UPLOAD_URL=$(echo "$RESP" | python3 -c "import sys,json; print(json.load(sys.stdin)['upload_url'].replace('{?name,label}',''))")
+          
+          # Upload APK
+          curl -s -X POST             -H "Authorization: token $GITHUB_TOKEN"             -H "Content-Type: application/vnd.android.package-archive"             --data-binary @app/build/outputs/apk/debug/app-debug.apk             "$UPLOAD_URL?name=app-debug.apk"
+          
+          echo ""
+          echo "Release uploaded successfully"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Check build result
-        if: steps.build.outputs.exit_code != 0
-        run: |
-          echo "Build failed with exit code ${{ steps.build.outputs.exit_code }}"
-          tail -50 /tmp/build.log
-          exit 1
