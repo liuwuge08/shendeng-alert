@@ -48,9 +48,10 @@ jobs:
         run: |
           gradle assembleDebug --stacktrace > /tmp/build.log 2>&1
           echo "exit_code=$?" >> $GITHUB_OUTPUT
-          ls -la app/build/outputs/apk/debug/ 2>/dev/null || echo "APK not found"
+        continue-on-error: true
 
       - name: Upload build log and APK to Release
+        if: always()
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-output
@@ -58,11 +59,13 @@ jobs:
           body: Build result
           files: |
             /tmp/build.log
-            app/build/outputs/apk/debug/app-debug.apk
           fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Fail if build failed
+      - name: Check build result
         if: steps.build.outputs.exit_code != 0
-        run: exit 1
+        run: |
+          echo "Build failed with exit code ${{ steps.build.outputs.exit_code }}"
+          tail -50 /tmp/build.log
+          exit 1
