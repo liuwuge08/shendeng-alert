@@ -21,8 +21,18 @@ jobs:
       - name: Install Android SDK components
         run: |
           echo "ANDROID_HOME=$ANDROID_HOME"
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses > /dev/null 2>&1 || true
-          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-34" "build-tools;34.0.0"
+          ls $ANDROID_HOME/cmdline-tools/
+          # Find sdkmanager
+          if [ -f "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" ]; then
+            SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          elif [ -f "$ANDROID_HOME/cmdline-tools/bin/sdkmanager" ]; then
+            SDKMANAGER="$ANDROID_HOME/cmdline-tools/bin/sdkmanager"
+          else
+            SDKMANAGER=$(find $ANDROID_HOME -name sdkmanager -type f 2>/dev/null | head -1)
+          fi
+          echo "Using sdkmanager: $SDKMANAGER"
+          yes | $SDKMANAGER --licenses > /dev/null 2>&1 || true
+          $SDKMANAGER "platforms;android-34" "build-tools;34.0.0"
 
       - name: Install Gradle 8.2
         run: |
@@ -33,23 +43,15 @@ jobs:
 
       - name: Build Debug APK
         run: |
-          set +e
           export GRADLE_OPTS="-Xmx2g"
           mkdir -p ~/.gradle
           echo "org.gradle.jvmargs=-Xmx2g -XX:MaxMetaspaceSize=512m" > ~/.gradle/gradle.properties
           echo "org.gradle.daemon=false" >> ~/.gradle/gradle.properties
           
-          gradle assembleDebug --no-daemon 2>&1 | tee /tmp/build.log | tail -40
-          
-          EXIT=${PIPESTATUS[0]}
-          echo ""
-          echo "BUILD EXIT CODE: $EXIT"
-          
-          if [ $EXIT -eq 0 ]; then
-            ls -la app/build/outputs/apk/debug/
-          fi
-          
-          exit $EXIT
+          echo "=== Starting build ==="
+          gradle assembleDebug --no-daemon
+          echo "=== Build complete ==="
+          ls -la app/build/outputs/apk/debug/
 
       - name: Upload APK to Release
         if: success()
@@ -57,7 +59,6 @@ jobs:
           TAG="latest"
           API_URL="https://api.github.com/repos/${{ github.repository }}"
           
-          # Delete existing release
           EXISTING=$(curl -s -H "Authorization: token $GITHUB_TOKEN" "$API_URL/releases/tags/$TAG" || echo "")
           if echo "$EXISTING" | grep -q '"id"'; then
             REL_ID=$(echo "$EXISTING" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
@@ -65,15 +66,12 @@ jobs:
             curl -s -X DELETE -H "Authorization: token $GITHUB_TOKEN" "$API_URL/git/refs/tags/$TAG"
           fi
           
-          # Create new release
           RESP=$(curl -s -X POST             -H "Authorization: token $GITHUB_TOKEN"             -H "Content-Type: application/json"             -d '{"tag_name":"'$TAG'","name":"神灯告警APK","body":"自动构建的神灯告警语音播报APK"}'             "$API_URL/releases")
           
           UPLOAD_URL=$(echo "$RESP" | python3 -c "import sys,json; print(json.load(sys.stdin)['upload_url'].replace('{?name,label}',''))")
           
-          # Upload APK
           curl -s -X POST             -H "Authorization: token $GITHUB_TOKEN"             -H "Content-Type: application/vnd.android.package-archive"             --data-binary @app/build/outputs/apk/debug/app-debug.apk             "$UPLOAD_URL?name=app-debug.apk"
           
-          echo ""
           echo "Release uploaded!"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
