@@ -44,31 +44,25 @@ jobs:
           rm gradle-8.2-bin.zip
 
       - name: Build Debug APK
+        id: build
         run: |
-          set +e
           gradle assembleDebug --stacktrace > /tmp/build.log 2>&1
-          BUILD_EXIT=$?
-          echo "=== BUILD EXIT CODE: $BUILD_EXIT ==="
-          if [ $BUILD_EXIT -ne 0 ]; then
-            echo "=== ERROR: What went wrong? ==="
-            grep -i "error:" /tmp/build.log | head -30
-            echo "=== FAILED TASKS ==="
-            grep -i "task.*failed\|FAILURE\|BUILD FAILED" /tmp/build.log | head -20
-            echo "=== LAST 100 LINES ==="
-            tail -100 /tmp/build.log
-            echo "=== END ERROR REPORT ==="
-            exit $BUILD_EXIT
-          fi
-          echo "BUILD SUCCESS"
-          ls -la app/build/outputs/apk/debug/
+          echo "exit_code=$?" >> $GITHUB_OUTPUT
+          ls -la app/build/outputs/apk/debug/ 2>/dev/null || echo "APK not found"
 
-      - name: Upload APK to Release
+      - name: Upload build log and APK to Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: latest
-          name: 神灯告警APK
-          body: 自动构建的神灯告警语音播报APK
-          files: app/build/outputs/apk/debug/app-debug.apk
-          fail_on_unmatched_files: true
+          tag_name: build-output
+          name: Build Output
+          body: Build result
+          files: |
+            /tmp/build.log
+            app/build/outputs/apk/debug/app-debug.apk
+          fail_on_unmatched_files: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Fail if build failed
+        if: steps.build.outputs.exit_code != 0
+        run: exit 1
