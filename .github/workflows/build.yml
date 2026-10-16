@@ -43,22 +43,17 @@ jobs:
           echo "$HOME/gradle-8.2/bin" >> $GITHUB_PATH
           rm gradle-8.2-bin.zip
 
-      - name: Build Debug APK (retry up to 3 times)
+      - name: Build Debug APK
         run: |
-          for i in 1 2 3; do
-            echo "=== Build attempt $i ==="
-            if gradle assembleDebug --no-daemon; then
-              echo "=== Build SUCCESS on attempt $i ==="
-              break
-            fi
-            echo "=== Build FAILED on attempt $i, retrying... ==="
-            if [ $i -lt 3 ]; then
-              sleep 10
-            else
-              echo "=== All 3 attempts failed ==="
-              exit 1
-            fi
-          done
+          gradle assembleDebug --stacktrace 2>&1 | tee build.log
+        continue-on-error: true
+
+      - name: Print build errors
+        if: failure()
+        run: |
+          echo "=== BUILD FAILED - Full output ==="
+          cat build.log
+          echo "=== END ==="
 
       - name: Verify APK
         run: ls -la app/build/outputs/apk/debug/
