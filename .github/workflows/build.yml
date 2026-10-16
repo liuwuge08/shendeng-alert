@@ -49,8 +49,13 @@ jobs:
       - name: Verify APK
         run: ls -la app/build/outputs/apk/debug/
 
-      - name: Upload APK
-        uses: actions/upload-artifact@v4
+      - name: Upload APK to Release
+        uses: softprops/action-gh-release@v2
         with:
-          name: app-debug
-          path: app/build/outputs/apk/debug/app-debug.apk
+          tag_name: latest
+          name: 神灯告警APK
+          body: 自动构建的神灯告警语音播报APK
+          files: app/build/outputs/apk/debug/app-debug.apk
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
