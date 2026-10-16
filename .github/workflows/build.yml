@@ -44,11 +44,15 @@ jobs:
           rm gradle-8.2-bin.zip
 
       - name: Build Debug APK
-        run: gradle assembleDebug --stacktrace 2>&1 | tail -100
+        run: gradle assembleDebug
+
+      - name: Verify APK
+        run: |
+          ls -la app/build/outputs/apk/debug/
+          echo "APK_SIZE=$(stat -c%s app/build/outputs/apk/debug/app-debug.apk)" >> $GITHUB_ENV
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
-        if: always()
         with:
           name: app-debug
           path: app/build/outputs/apk/debug/app-debug.apk
