@@ -44,14 +44,13 @@ jobs:
           rm gradle-8.2-bin.zip
 
       - name: Build Debug APK
-        run: |
-          gradle assembleDebug --info 2>&1 | tee build_output.log | tail -200
-          echo "=== LAST 50 LINES OF LOG ==="
-          tail -50 build_output.log
+        run: gradle assembleDebug
+
+      - name: Verify APK
+        run: ls -la app/build/outputs/apk/debug/
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
-        if: success()
         with:
           name: app-debug
           path: app/build/outputs/apk/debug/app-debug.apk
