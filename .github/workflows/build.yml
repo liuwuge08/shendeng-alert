@@ -36,14 +36,19 @@ jobs:
           yes | sdkmanager --licenses > /dev/null 2>&1
           sdkmanager "platforms;android-34" "build-tools;34.0.0"
 
-      - name: Make gradlew executable
-        run: chmod +x gradlew
+      - name: Install Gradle
+        run: |
+          wget -q https://services.gradle.org/distributions/gradle-8.7-bin.zip
+          unzip -q gradle-8.7-bin.zip -d $HOME
+          echo "$HOME/gradle-8.7/bin" >> $GITHUB_PATH
+          rm gradle-8.7-bin.zip
 
       - name: Build Debug APK
-        run: ./gradlew assembleDebug
+        run: gradle assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: app-debug
           path: app/build/outputs/apk/debug/app-debug.apk
