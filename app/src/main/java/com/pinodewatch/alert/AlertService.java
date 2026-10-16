@@ -75,7 +75,7 @@ public class AlertService extends Service {
         tts = new TextToSpeech(this, status -> {
             if (status == TextToSpeech.SUCCESS) {
                 int result = tts.setLanguage(Locale.CHINA);
-                ttsReady = (result == TextToSpeech.LANG_COUNTRY_AVAILABLE 
+                ttsReady = (result == TextToSpeech.LANG_COUNTRY_AVAILABLE
                             || result == TextToSpeech.LANG_AVAILABLE);
                 tts.setPitch(1.0f);
                 tts.setSpeechRate(1.0f);
@@ -154,10 +154,12 @@ public class AlertService extends Service {
 
     private void handleSSEEvent(String event, String data) {
         try {
-            if ("alert".equals(event)) {
-                org.json.JSONObject json = new org.json.JSONObject(data);
-                String msgId = json.optString("id", "");
-                String msg = json.optString("msg", "");
+            org.json.JSONObject json = new org.json.JSONObject(data);
+            String type = json.optString("type", "");
+
+            if ("alert".equals(type)) {
+                String msgId = json.optString("msg_id", "");
+                String msgText = json.optString("text", "");
 
                 if (!msgId.isEmpty() && msgIds.contains(msgId)) {
                     return;
@@ -169,9 +171,9 @@ public class AlertService extends Service {
                     }
                 }
 
-                if (!msg.isEmpty()) {
-                    speakAlert(msg);
-                    updateNotification("新告警: " + msg);
+                if (!msgText.isEmpty()) {
+                    speakAlert(msgText);
+                    updateNotification("新告警: " + msgText);
                 }
             }
         } catch (Exception e) {

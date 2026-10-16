@@ -18,6 +18,7 @@ public class MainActivity extends AppCompatActivity {
     private Button btnToggle;
     private TextView tvStatus;
     private TextView tvBindCode;
+    private Button btnRefreshCode;
     private boolean serviceRunning = false;
     private AlertService alertService = null;
 
@@ -44,8 +45,10 @@ public class MainActivity extends AppCompatActivity {
         btnToggle = findViewById(R.id.btn_toggle);
         tvStatus = findViewById(R.id.tv_status);
         tvBindCode = findViewById(R.id.tv_bind_code);
+        btnRefreshCode = findViewById(R.id.btn_refresh_code);
 
         btnToggle.setOnClickListener(v -> toggleService());
+        btnRefreshCode.setOnClickListener(v -> refreshBindCode());
 
         if (AlertService.isRunning) {
             Intent intent = new Intent(this, AlertService.class);
@@ -60,7 +63,7 @@ public class MainActivity extends AppCompatActivity {
     private void updateBindCode() {
         SharedPreferences sp = getSharedPreferences("alert", MODE_PRIVATE);
         String bindCode = sp.getString("bind_code", "");
-        
+
         if (sp.getBoolean("bound", false)) {
             tvBindCode.setText("已绑定 ✓");
         } else if (!bindCode.isEmpty()) {
@@ -71,35 +74,56 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    private void refreshBindCode() {
+        SharedPreferences sp = getSharedPreferences("alert", MODE_PRIVATE);
+        sp.edit().remove("bind_code").remove("app_id").remove("bound").apply();
+        tvBindCode.setText("正在获取绑定码...");
+        new Thread(() -> registerApp()).start();
+    }
+
     private void registerApp() {
         try {
             String url = AlertApp.SERVER_BASE + "/api/alert/app/register";
-            java.net.HttpURLConnection conn = (java.net.HttpURLConnection) 
+            java.net.HttpURLConnection conn = (java.net.HttpURLConnection)
                 new java.net.URL(url).openConnection();
             conn.setRequestMethod("GET");
             conn.setConnectTimeout(10000);
-            
-            java.io.InputStream is = conn.getInputStream();
+            conn.setReadTimeout(10000);
+
+            int code = conn.getResponseCode();
+            java.io.InputStream is;
+            if (code >= 200 && code < 300) {
+                is = conn.getInputStream();
+            } else {
+                is = conn.getErrorStream();
+            }
             java.util.Scanner s = new java.util.Scanner(is).useDelimiter("\\A");
             String response = s.hasNext() ? s.next() : "";
-            
+            s.close();
+
             JSONObject json = new JSONObject(response);
-            if (json.getBoolean("success")) {
+            if (json.optBoolean("success", false)) {
                 String appId = json.getString("app_id");
                 String bindCode = json.getString("bind_code");
-                
+
                 SharedPreferences sp = getSharedPreferences("alert", MODE_PRIVATE);
                 sp.edit().putString("app_id", appId)
                         .putString("bind_code", bindCode)
                         .apply();
-                
+
                 runOnUiThread(() -> {
                     tvBindCode.setText("绑定码: " + bindCode + "\n打开神灯网页输入绑定码");
                 });
+            } else {
+                final String err = json.optString("error", "未知错误");
+                runOnUiThread(() -> {
+                    tvBindCode.setText("获取失败: " + err);
+                });
             }
         } catch (Exception e) {
+            final String errMsg = e.getMessage() != null ? e.getMessage() : "网络错误";
             runOnUiThread(() -> {
-                tvBindCode.setText("获取绑定码失败，请检查网络");
+                tvBindCode.setText("获取失败: " + errMsg);
             });
         }
     }
@@ -120,7 +144,7 @@ public class MainActivity extends AppCompatActivity {
                 Toast.makeText(this, "正在获取绑定码，请稍候", Toast.LENGTH_SHORT).show();
                 return;
             }
-            
+
             Intent intent = new Intent(this, AlertService.class);
             intent.putExtra("app_id", appId);
             startForegroundService(intent);

@@ -10,31 +10,30 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="神灯告警语音播报"
-        android:textSize="24sp"
-        android:textColor="#333333"
+        android:textSize="28sp"
         android:textStyle="bold"
         android:layout_marginTop="40dp"
-        android:layout_marginBottom="20dp"/>
+        android:layout_marginBottom="20dp"
+        android:textColor="#333333"/>
 
     <TextView
         android:id="@+id/tv_status"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="状态: 已停止"
-        android:textSize="16sp"
-        android:textColor="#999999"
-        android:layout_marginBottom="20dp"/>
+        android:textSize="18sp"
+        android:layout_marginBottom="30dp"
+        android:textColor="#999999"/>
 
     <Button
         android:id="@+id/btn_toggle"
         android:layout_width="match_parent"
         android:layout_height="60dp"
         android:text="开启告警播报"
+        android:textSize="20sp"
         android:textColor="#FFFFFF"
-        android:textSize="18sp"
-        android:textStyle="bold"
         android:background="#4ECDC4"
-        android:layout_marginBottom="30dp"/>
+        android:layout_marginBottom="40dp"/>
 
     <View
         android:layout_width="match_parent"
@@ -46,20 +45,30 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:text="绑定说明"
-        android:textSize="16sp"
-        android:textColor="#333333"
+        android:textSize="18sp"
         android:textStyle="bold"
-        android:layout_marginBottom="10dp"
-        android:layout_gravity="left"/>
+        android:layout_gravity="start"
+        android:layout_marginBottom="12dp"
+        android:textColor="#333333"/>
 
     <TextView
         android:id="@+id/tv_bind_code"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="正在获取绑定码..."
+        android:textSize="16sp"
+        android:lineSpacingExtra="6dp"
+        android:textColor="#666666"
+        android:layout_marginBottom="20dp"/>
+
+    <Button
+        android:id="@+id/btn_refresh_code"
+        android:layout_width="wrap_content"
+        android:layout_height="40dp"
+        android:text="刷新绑定码"
         android:textSize="14sp"
         android:textColor="#666666"
-        android:lineSpacingExtra="6dp"
-        android:layout_gravity="left"/>
+        android:background="#F0F0F0"
+        android:layout_gravity="start"/>
 
 </LinearLayout>
