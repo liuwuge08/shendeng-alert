@@ -50,23 +50,14 @@ jobs:
           mkdir -p ~/.gradle
           echo "org.gradle.jvmargs=-Xmx2g -XX:MaxMetaspaceSize=512m" > ~/.gradle/gradle.properties
           echo "org.gradle.daemon=false" >> ~/.gradle/gradle.properties
+          echo "org.gradle.parallel=false" >> ~/.gradle/gradle.properties
           
-          echo "=== Starting Gradle build ==="
-          gradle --version
-          echo "=== Running assembleDebug ==="
+          gradle assembleDebug --no-daemon --info 2>&1 | tee /tmp/build.log | tail -80
           
-          gradle assembleDebug --no-daemon > /tmp/build.log 2>&1
-          EXIT=$?
-          
+          EXIT=${PIPESTATUS[0]}
+          echo ""
           echo "=== BUILD EXIT CODE: $EXIT ==="
-          
-          if [ $EXIT -ne 0 ]; then
-            echo "=== LAST 100 LINES OF BUILD LOG ==="
-            tail -100 /tmp/build.log
-            echo "=== END LOG ==="
-          else
-            echo "BUILD SUCCESS"
-            ls -la app/build/outputs/apk/debug/
-          fi
-          
+          echo "=== FULL LOG LAST 150 LINES ==="
+          tail -150 /tmp/build.log
+          echo "=== END ==="
           exit $EXIT
