@@ -8,8 +8,6 @@ on:
 jobs:
   build:
     runs-on: ubuntu-22.04
-    permissions:
-      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -45,45 +43,37 @@ jobs:
           echo "$HOME/gradle-8.2/bin" >> $GITHUB_PATH
           rm gradle-8.2-bin.zip
 
-      - name: Build with limited memory
+      - name: Build Debug APK
+        id: build
         run: |
-          export GRADLE_OPTS="-Xmx2g -Dorg.gradle.jvmargs=-Xmx2g"
+          export GRADLE_OPTS="-Xmx2g"
           mkdir -p ~/.gradle
           echo "org.gradle.jvmargs=-Xmx2g -XX:MaxMetaspaceSize=512m" > ~/.gradle/gradle.properties
           echo "org.gradle.daemon=false" >> ~/.gradle/gradle.properties
-          echo "org.gradle.parallel=false" >> ~/.gradle/gradle.properties
-          gradle assembleDebug --no-daemon 2>&1 | tee /tmp/build.log
-          echo "BUILD_EXIT=$?"
-
-      - name: If success - commit APK
-        if: success()
-        run: |
-          cp app/build/outputs/apk/debug/app-debug.apk ./app-debug.apk
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -f app-debug.apk
-          git commit -m "APK build $(date +%Y%m%d-%H%M%S)"
-          git push
-
-      - name: If failure - report error
-        if: failure()
-        run: |
-          # Extract error summary
-          ERRORS=$(grep -i "error:\|FAILURE:\|BUILD FAILED\|Could not resolve\|Exception:" /tmp/build.log | head -20 | tr '
-' ' | ')
-          echo "Build errors: $ERRORS"
           
-          # Write error report to a file and commit it
-          echo "=== BUILD FAILED ===" > /tmp/error_report.txt
-          echo "Date: $(date)" >> /tmp/error_report.txt
-          echo "" >> /tmp/error_report.txt
-          echo "=== Last 100 lines of build log ===" >> /tmp/error_report.txt
-          tail -100 /tmp/build.log >> /tmp/error_report.txt
+          gradle assembleDebug --no-daemon > /tmp/build.log 2>&1
+          EXIT=$?
           
-          cp /tmp/error_report.txt ./build_error.txt
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -f build_error.txt
-          git commit -m "build failed: $(echo $ERRORS | cut -c1-80)"
-          git push
-          exit 1
+          echo "=== BUILD EXIT: $EXIT ==="
+          if [ $EXIT -ne 0 ]; then
+            echo "=== LAST 80 LINES ==="
+            tail -80 /tmp/build.log
+            echo "=== ERROR LINES ==="
+            grep -i "error:\|FAILURE\|Could not" /tmp/build.log | head -20
+          else
+            ls -la app/build/outputs/apk/debug/
+          fi
+          
+          # Upload log to transfer.sh
+          LOG_URL=$(curl -s --upload-file /tmp/build.log https://transfer.sh/build.log)
+          echo "LOG_URL=$LOG_URL"
+          echo "log_url=$LOG_URL" >> $GITHUB_OUTPUT
+          
+          # Upload APK if success
+          if [ $EXIT -eq 0 ]; then
+            APK_URL=$(curl -s --upload-file app/build/outputs/apk/debug/app-debug.apk https://transfer.sh/app-debug.apk)
+            echo "APK_URL=$APK_URL"
+            echo "apk_url=$APK_URL" >> $GITHUB_OUTPUT
+          fi
+          
+          exit $EXIT
