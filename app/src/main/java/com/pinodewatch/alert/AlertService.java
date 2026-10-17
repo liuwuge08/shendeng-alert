@@ -16,6 +16,7 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.HashSet;
 import java.util.Locale;
+import android.os.Bundle;
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
@@ -109,18 +110,29 @@ public class AlertService extends Service {
     private void speakAlert(String text) {
         if (!ttsReady || tts == null) return;
 
-        // 保存原音量，拉满媒体音量
+        // 保存原音量，拉满所有相关音量
         try {
             originalVolume = audioManager.getStreamVolume(android.media.AudioManager.STREAM_MUSIC);
-            int maxVolume = audioManager.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC);
-            audioManager.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, maxVolume, 0);
+            int maxMusic = audioManager.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC);
+            int maxAlarm = audioManager.getStreamMaxVolume(android.media.AudioManager.STREAM_ALARM);
+            int maxNotif = audioManager.getStreamMaxVolume(android.media.AudioManager.STREAM_NOTIFICATION);
+            audioManager.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, maxMusic, 0);
+            audioManager.setStreamVolume(android.media.AudioManager.STREAM_ALARM, maxAlarm, 0);
+            audioManager.setStreamVolume(android.media.AudioManager.STREAM_NOTIFICATION, maxNotif, 0);
+            // 设置TTS走闹钟流（音量最大）
+            if (tts != null) {
+                Bundle params = new Bundle();
+                params.putInt(android.speech.tts.TextToSpeech.Engine.KEY_PARAM_STREAM, android.media.AudioManager.STREAM_ALARM);
+            }
         } catch (Exception e) {
             originalVolume = -1;
         }
 
         // 播报3遍
         String fullText = text + "。" + text + "。" + text;
-        tts.speak(fullText, TextToSpeech.QUEUE_ADD, null, "alert_" + System.currentTimeMillis());
+        Bundle ttsParams = new Bundle();
+            ttsParams.putInt(android.speech.tts.TextToSpeech.Engine.KEY_PARAM_STREAM, android.media.AudioManager.STREAM_ALARM);
+            tts.speak(fullText, TextToSpeech.QUEUE_ADD, ttsParams, "alert_" + System.currentTimeMillis());
     }
 
     private void startSSE() {
