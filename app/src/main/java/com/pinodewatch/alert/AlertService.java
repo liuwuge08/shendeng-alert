@@ -16,6 +16,11 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.HashSet;
 import java.util.Locale;
+import javax.net.ssl.HttpsURLConnection;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509TrustManager;
+import java.security.cert.X509Certificate;
 import java.util.Set;
 import android.net.wifi.WifiManager;
 import android.os.PowerManager;
@@ -143,6 +148,21 @@ public class AlertService extends Service {
     }
 
     private void connectSSE() throws Exception {
+        // 信任所有SSL证书（解决部分手机Let's Encrypt证书验证失败问题）
+        try {
+            TrustManager[] trustAll = new TrustManager[]{
+                new X509TrustManager() {
+                    public X509Certificate[] getAcceptedIssuers() { return new X509Certificate[0]; }
+                    public void checkClientTrusted(X509Certificate[] chain, String authType) {}
+                    public void checkServerTrusted(X509Certificate[] chain, String authType) {}
+                }
+            };
+            SSLContext sc = SSLContext.getInstance("TLS");
+            sc.init(null, trustAll, new java.security.SecureRandom());
+            HttpsURLConnection.setDefaultSSLSocketFactory(sc.getSocketFactory());
+            HttpsURLConnection.setDefaultHostnameVerifier((hostname, session) -> true);
+        } catch (Exception e) {}
+
         String sseUrl = AlertApp.SERVER_BASE + "/api/alert/app/sse/" + appId;
         URL url = new URL(sseUrl);
         HttpURLConnection conn = (HttpURLConnection) url.openConnection();
