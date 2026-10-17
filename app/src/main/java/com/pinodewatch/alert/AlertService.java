@@ -17,6 +17,11 @@ import java.net.URL;
 import java.util.HashSet;
 import java.util.Locale;
 import android.os.Bundle;
+import android.os.Vibrator;
+import android.os.VibrationEffect;
+import android.media.Ringtone;
+import android.media.RingtoneManager;
+import android.net.Uri;
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
@@ -42,6 +47,8 @@ public class AlertService extends Service {
     private Set<String> msgIds = new HashSet<>();
     private WifiManager.WifiLock wifiLock;
     private PowerManager.WakeLock wakeLock;
+    private Vibrator vibrator;
+    private Ringtone ringtone;
 
     public class AlertBinder extends Binder {
         public AlertService getService() {
@@ -61,6 +68,15 @@ public class AlertService extends Service {
         PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
         wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "AlertWakeLock");
         wakeLock.setReferenceCounted(false);
+        vibrator = (Vibrator) getSystemService(VIBRATOR_SERVICE);
+        // 初始化默认通知铃声
+        try {
+            Uri notificationUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM);
+            ringtone = RingtoneManager.getRingtone(getApplicationContext(), notificationUri);
+            if (ringtone != null) {
+                ringtone.setStreamType(android.media.AudioManager.STREAM_ALARM);
+            }
+        } catch (Exception e) {}
         initTTS();
     }
 
@@ -108,9 +124,18 @@ public class AlertService extends Service {
     }
 
     private void speakAlert(String text) {
-        if (!ttsReady || tts == null) return;
+        // 先震动提醒
+        try {
+            if (vibrator != null) {
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                    vibrator.vibrate(VibrationEffect.createWaveform(new long[]{0, 500, 200, 500, 200, 500}, -1));
+                } else {
+                    vibrator.vibrate(new long[]{0, 500, 200, 500, 200, 500}, -1);
+                }
+            }
+        } catch (Exception e) {}
 
-        // 保存原音量，拉满所有相关音量
+        // 拉满音量
         try {
             originalVolume = audioManager.getStreamVolume(android.media.AudioManager.STREAM_MUSIC);
             int maxMusic = audioManager.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC);
@@ -119,20 +144,28 @@ public class AlertService extends Service {
             audioManager.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, maxMusic, 0);
             audioManager.setStreamVolume(android.media.AudioManager.STREAM_ALARM, maxAlarm, 0);
             audioManager.setStreamVolume(android.media.AudioManager.STREAM_NOTIFICATION, maxNotif, 0);
-            // 设置TTS走闹钟流（音量最大）
-            if (tts != null) {
-                Bundle params = new Bundle();
-                params.putInt(android.speech.tts.TextToSpeech.Engine.KEY_PARAM_STREAM, android.media.AudioManager.STREAM_ALARM);
-            }
         } catch (Exception e) {
             originalVolume = -1;
         }
 
-        // 播报3遍
-        String fullText = text + "。" + text + "。" + text;
-        Bundle ttsParams = new Bundle();
+        // 播放闹钟铃声（兜底，确保一定有声音）
+        try {
+            if (ringtone != null && !ringtone.isPlaying()) {
+                ringtone.play();
+                // 5秒后停铃声
+                new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+                    try { if (ringtone != null) ringtone.stop(); } catch (Exception e) {}
+                }, 5000);
+            }
+        } catch (Exception e) {}
+
+        // TTS语音播报
+        if (ttsReady && tts != null) {
+            String fullText = text + "。" + text + "。" + text;
+            Bundle ttsParams = new Bundle();
             ttsParams.putInt(android.speech.tts.TextToSpeech.Engine.KEY_PARAM_STREAM, android.media.AudioManager.STREAM_ALARM);
             tts.speak(fullText, TextToSpeech.QUEUE_ADD, ttsParams, "alert_" + System.currentTimeMillis());
+        }
     }
 
     private void startSSE() {
