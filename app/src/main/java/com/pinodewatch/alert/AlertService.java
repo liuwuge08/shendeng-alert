@@ -78,7 +78,7 @@ public class AlertService extends Service {
         try { wakeLock.acquire(); } catch (Exception e) {}
         isRunning = true;
         startSSE();
-        return START_STICKY;
+        return START_REDELIVER_INTENT;
     }
 
     private Notification buildNotification(String text) {
@@ -246,6 +246,20 @@ public class AlertService extends Service {
         if (nm != null) {
             nm.notify(NOTIFICATION_ID, buildNotification(text));
         }
+    }
+
+    @Override
+    public void onTaskRemoved(Intent rootIntent) {
+        // 用户划掉APP时，重启服务
+        android.app.AlarmManager am = (android.app.AlarmManager) getSystemService(ALARM_SERVICE);
+        Intent restartIntent = new Intent(this, AlertService.class);
+        restartIntent.putExtra("app_id", appId);
+        android.app.PendingIntent pi = android.app.PendingIntent.getService(
+            this, 0, restartIntent, android.app.PendingIntent.FLAG_ONE_SHOT | android.app.PendingIntent.FLAG_IMMUTABLE);
+        if (am != null) {
+            am.set(android.app.AlarmManager.RTC_WAKEUP, System.currentTimeMillis() + 1000, pi);
+        }
+        super.onTaskRemoved(rootIntent);
     }
 
     @Override
