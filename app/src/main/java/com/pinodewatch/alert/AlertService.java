@@ -20,9 +20,7 @@ import java.util.Locale;
 import android.os.Bundle;
 import android.os.Vibrator;
 import android.os.VibrationEffect;
-import android.media.Ringtone;
-import android.media.RingtoneManager;
-import android.net.Uri;
+import android.media.MediaPlayer;
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
@@ -49,7 +47,6 @@ public class AlertService extends Service {
     private WifiManager.WifiLock wifiLock;
     private PowerManager.WakeLock wakeLock;
     private Vibrator vibrator;
-    private Ringtone ringtone;
     private AlarmManager alarmManager;
     private PendingIntent heartbeatIntent;
     private static final int HEARTBEAT_INTERVAL = 60000; // 1分钟心跳
@@ -73,14 +70,6 @@ public class AlertService extends Service {
         wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "AlertWakeLock");
         wakeLock.setReferenceCounted(false);
         vibrator = (Vibrator) getSystemService(VIBRATOR_SERVICE);
-        // 初始化默认通知铃声
-        try {
-            Uri notificationUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM);
-            ringtone = RingtoneManager.getRingtone(getApplicationContext(), notificationUri);
-            if (ringtone != null) {
-                ringtone.setStreamType(android.media.AudioManager.STREAM_ALARM);
-            }
-        } catch (Exception e) {}
         initTTS();
         startHeartbeat();
     }
@@ -133,9 +122,9 @@ public class AlertService extends Service {
         try {
             if (vibrator != null) {
                 if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                    vibrator.vibrate(VibrationEffect.createWaveform(new long[]{0, 500, 200, 500, 200, 500}, -1));
+                    vibrator.vibrate(VibrationEffect.createWaveform(new long[]{0, 400, 150, 400, 150, 400, 150, 400}, -1));
                 } else {
-                    vibrator.vibrate(new long[]{0, 500, 200, 500, 200, 500}, -1);
+                    vibrator.vibrate(new long[]{0, 400, 150, 400, 150, 400, 150, 400}, -1);
                 }
             }
         } catch (Exception e) {}
@@ -153,23 +142,12 @@ public class AlertService extends Service {
             originalVolume = -1;
         }
 
-        // 播放闹钟铃声（兜底，确保一定有声音）
-        try {
-            if (ringtone != null && !ringtone.isPlaying()) {
-                ringtone.play();
-                // 5秒后停铃声
-                new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
-                    try { if (ringtone != null) ringtone.stop(); } catch (Exception e) {}
-                }, 5000);
-            }
-        } catch (Exception e) {}
-
-        // TTS语音播报
+        // TTS语音播报：先喊"主人注意，节点告警！"吸引注意力，再播具体内容，重复3遍
         if (ttsReady && tts != null) {
-            String fullText = text + "。" + text + "。" + text;
+            String fullText = "主人注意，节点告警！" + text + "。" + text + "。" + text;
             Bundle ttsParams = new Bundle();
             ttsParams.putInt(android.speech.tts.TextToSpeech.Engine.KEY_PARAM_STREAM, android.media.AudioManager.STREAM_ALARM);
-            tts.speak(fullText, TextToSpeech.QUEUE_ADD, ttsParams, "alert_" + System.currentTimeMillis());
+            tts.speak(fullText, TextToSpeech.QUEUE_FLUSH, ttsParams, "alert_" + System.currentTimeMillis());
         }
     }
 
