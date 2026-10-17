@@ -28,6 +28,8 @@ public class AlertService extends Service {
     private boolean ttsReady = false;
     private String appId = "";
     private boolean sseRunning = false;
+    private android.media.AudioManager audioManager;
+    private int originalVolume = -1;
     private Thread sseThread = null;
     private Set<String> msgIds = new HashSet<>();
 
@@ -40,6 +42,7 @@ public class AlertService extends Service {
     @Override
     public void onCreate() {
         super.onCreate();
+        audioManager = (android.media.AudioManager) getSystemService(AUDIO_SERVICE);
         initTTS();
     }
 
@@ -85,7 +88,18 @@ public class AlertService extends Service {
 
     private void speakAlert(String text) {
         if (!ttsReady || tts == null) return;
-        String fullText = text + "。" + text;
+
+        // 保存原音量，拉满媒体音量
+        try {
+            originalVolume = audioManager.getStreamVolume(android.media.AudioManager.STREAM_MUSIC);
+            int maxVolume = audioManager.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC);
+            audioManager.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, maxVolume, 0);
+        } catch (Exception e) {
+            originalVolume = -1;
+        }
+
+        // 播报3遍
+        String fullText = text + "。" + text + "。" + text;
         tts.speak(fullText, TextToSpeech.QUEUE_ADD, null, "alert_" + System.currentTimeMillis());
     }
 
@@ -194,6 +208,12 @@ public class AlertService extends Service {
         if (tts != null) {
             tts.stop();
             tts.shutdown();
+        }
+        // 恢复原音量
+        if (originalVolume >= 0 && audioManager != null) {
+            try {
+                audioManager.setStreamVolume(android.media.AudioManager.STREAM_MUSIC, originalVolume, 0);
+            } catch (Exception e) {}
         }
         super.onDestroy();
     }
