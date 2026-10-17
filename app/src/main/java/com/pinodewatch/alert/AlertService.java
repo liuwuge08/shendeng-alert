@@ -169,7 +169,7 @@ public class AlertService extends Service {
 
             // TTS播报：主人注意节点告警 + 具体内容，重复3遍
             if (ttsReady && tts != null) {
-                String fullText = "主人注意，节点告警！" + text + "。" + text + "。" + text;
+                String fullText = "主人，主人，节点告警！" + text + "。" + text + "。" + text;
                 Bundle ttsParams = new Bundle();
                 ttsParams.putInt(android.speech.tts.TextToSpeech.Engine.KEY_PARAM_STREAM, android.media.AudioManager.STREAM_ALARM);
                 tts.speak(fullText, TextToSpeech.QUEUE_FLUSH, ttsParams, "alert_" + System.currentTimeMillis());
