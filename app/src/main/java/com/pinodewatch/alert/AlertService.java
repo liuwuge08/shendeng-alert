@@ -17,6 +17,8 @@ import java.net.URL;
 import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
+import android.net.wifi.WifiManager;
+import android.os.PowerManager;
 
 public class AlertService extends Service {
 
@@ -32,6 +34,8 @@ public class AlertService extends Service {
     private int originalVolume = -1;
     private Thread sseThread = null;
     private Set<String> msgIds = new HashSet<>();
+    private WifiManager.WifiLock wifiLock;
+    private PowerManager.WakeLock wakeLock;
 
     public class AlertBinder extends Binder {
         public AlertService getService() {
@@ -43,6 +47,14 @@ public class AlertService extends Service {
     public void onCreate() {
         super.onCreate();
         audioManager = (android.media.AudioManager) getSystemService(AUDIO_SERVICE);
+        // WiFi锁，防止息屏断网
+        WifiManager wm = (WifiManager) getApplicationContext().getSystemService(WIFI_SERVICE);
+        wifiLock = wm.createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "AlertWiFiLock");
+        wifiLock.setReferenceCounted(false);
+        // 唤醒锁，防止CPU休眠
+        PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
+        wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "AlertWakeLock");
+        wakeLock.setReferenceCounted(false);
         initTTS();
     }
 
@@ -55,6 +67,9 @@ public class AlertService extends Service {
         }
 
         startForeground(NOTIFICATION_ID, buildNotification("神灯告警服务运行中"));
+        // 加锁保活
+        try { wifiLock.acquire(); } catch (Exception e) {}
+        try { wakeLock.acquire(); } catch (Exception e) {}
         isRunning = true;
         startSSE();
         return START_STICKY;
@@ -123,7 +138,7 @@ public class AlertService extends Service {
                 }
             }
         });
-        sseThread.setDaemon(true);
+
         sseThread.start();
     }
 
@@ -205,6 +220,9 @@ public class AlertService extends Service {
     public void onDestroy() {
         sseRunning = false;
         isRunning = false;
+        // 释放锁
+        try { if (wifiLock != null && wifiLock.isHeld()) wifiLock.release(); } catch (Exception e) {}
+        try { if (wakeLock != null && wakeLock.isHeld()) wakeLock.release(); } catch (Exception e) {}
         if (tts != null) {
             tts.stop();
             tts.shutdown();
