@@ -20,7 +20,9 @@ import java.util.Locale;
 import android.os.Bundle;
 import android.os.Vibrator;
 import android.os.VibrationEffect;
-import android.media.MediaPlayer;
+import android.media.Ringtone;
+import android.media.RingtoneManager;
+import android.net.Uri;
 import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
@@ -47,6 +49,7 @@ public class AlertService extends Service {
     private WifiManager.WifiLock wifiLock;
     private PowerManager.WakeLock wakeLock;
     private Vibrator vibrator;
+    private Ringtone alertRingtone;
     private AlarmManager alarmManager;
     private PendingIntent heartbeatIntent;
     private static final int HEARTBEAT_INTERVAL = 60000; // 1分钟心跳
@@ -70,6 +73,14 @@ public class AlertService extends Service {
         wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "AlertWakeLock");
         wakeLock.setReferenceCounted(false);
         vibrator = (Vibrator) getSystemService(VIBRATOR_SERVICE);
+        // 初始化闹钟铃声
+        try {
+            Uri alarmUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM);
+            alertRingtone = RingtoneManager.getRingtone(getApplicationContext(), alarmUri);
+            if (alertRingtone != null) {
+                alertRingtone.setStreamType(android.media.AudioManager.STREAM_ALARM);
+            }
+        } catch (Exception e) {}
         initTTS();
         startHeartbeat();
     }
@@ -118,17 +129,6 @@ public class AlertService extends Service {
     }
 
     private void speakAlert(String text) {
-        // 先震动提醒
-        try {
-            if (vibrator != null) {
-                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                    vibrator.vibrate(VibrationEffect.createWaveform(new long[]{0, 400, 150, 400, 150, 400, 150, 400}, -1));
-                } else {
-                    vibrator.vibrate(new long[]{0, 400, 150, 400, 150, 400, 150, 400}, -1);
-                }
-            }
-        } catch (Exception e) {}
-
         // 拉满音量
         try {
             originalVolume = audioManager.getStreamVolume(android.media.AudioManager.STREAM_MUSIC);
@@ -142,13 +142,39 @@ public class AlertService extends Service {
             originalVolume = -1;
         }
 
-        // TTS语音播报：先喊"主人注意，节点告警！"吸引注意力，再播具体内容，重复3遍
-        if (ttsReady && tts != null) {
-            String fullText = "主人注意，节点告警！" + text + "。" + text + "。" + text;
-            Bundle ttsParams = new Bundle();
-            ttsParams.putInt(android.speech.tts.TextToSpeech.Engine.KEY_PARAM_STREAM, android.media.AudioManager.STREAM_ALARM);
-            tts.speak(fullText, TextToSpeech.QUEUE_FLUSH, ttsParams, "alert_" + System.currentTimeMillis());
-        }
+        // 第一阶段：铃声+震动预警（响2秒，吸引注意力）
+        try {
+            if (vibrator != null) {
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                    vibrator.vibrate(VibrationEffect.createWaveform(new long[]{0, 300, 100, 300, 100, 300, 100, 300, 100, 300}, -1));
+                } else {
+                    vibrator.vibrate(new long[]{0, 300, 100, 300, 100, 300, 100, 300, 100, 300}, -1);
+                }
+            }
+            if (alertRingtone != null && !alertRingtone.isPlaying()) {
+                alertRingtone.play();
+            }
+        } catch (Exception e) {}
+
+        // 2秒后停铃声，开始TTS语音播报
+        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+            try {
+                if (alertRingtone != null && alertRingtone.isPlaying()) {
+                    alertRingtone.stop();
+                }
+                if (vibrator != null) {
+                    vibrator.cancel();
+                }
+            } catch (Exception e) {}
+
+            // TTS播报：主人注意节点告警 + 具体内容，重复3遍
+            if (ttsReady && tts != null) {
+                String fullText = "主人注意，节点告警！" + text + "。" + text + "。" + text;
+                Bundle ttsParams = new Bundle();
+                ttsParams.putInt(android.speech.tts.TextToSpeech.Engine.KEY_PARAM_STREAM, android.media.AudioManager.STREAM_ALARM);
+                tts.speak(fullText, TextToSpeech.QUEUE_FLUSH, ttsParams, "alert_" + System.currentTimeMillis());
+            }
+        }, 2000);
     }
 
     private void startSSE() {
