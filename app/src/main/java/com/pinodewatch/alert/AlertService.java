@@ -3,6 +3,7 @@ package com.pinodewatch.alert;
 import android.app.Notification;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
+import android.app.AlarmManager;
 import android.app.Service;
 import android.content.Intent;
 import android.os.Binder;
@@ -49,6 +50,9 @@ public class AlertService extends Service {
     private PowerManager.WakeLock wakeLock;
     private Vibrator vibrator;
     private Ringtone ringtone;
+    private AlarmManager alarmManager;
+    private PendingIntent heartbeatIntent;
+    private static final int HEARTBEAT_INTERVAL = 60000; // 1分钟心跳
 
     public class AlertBinder extends Binder {
         public AlertService getService() {
@@ -78,6 +82,7 @@ public class AlertService extends Service {
             }
         } catch (Exception e) {}
         initTTS();
+        startHeartbeat();
     }
 
     @Override
@@ -293,6 +298,33 @@ public class AlertService extends Service {
             am.set(android.app.AlarmManager.RTC_WAKEUP, System.currentTimeMillis() + 1000, pi);
         }
         super.onTaskRemoved(rootIntent);
+    }
+
+
+    private void startHeartbeat() {
+        try {
+            alarmManager = (AlarmManager) getSystemService(ALARM_SERVICE);
+            Intent intent = new Intent(this, HeartbeatReceiver.class);
+            intent.setAction("com.pinodewatch.alert.HEARTBEAT");
+            heartbeatIntent = PendingIntent.getBroadcast(
+                this, 1001, intent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+            );
+            alarmManager.setRepeating(
+                AlarmManager.RTC_WAKEUP,
+                System.currentTimeMillis() + HEARTBEAT_INTERVAL,
+                HEARTBEAT_INTERVAL,
+                heartbeatIntent
+            );
+        } catch (Exception e) {}
+    }
+
+    private void stopHeartbeat() {
+        try {
+            if (alarmManager != null && heartbeatIntent != null) {
+                alarmManager.cancel(heartbeatIntent);
+            }
+        } catch (Exception e) {}
     }
 
     @Override
